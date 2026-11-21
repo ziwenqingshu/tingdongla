@@ -1,0 +1,12 @@
+import { pipeline, env } from '@huggingface/transformers';
+import fs from 'fs';
+env.cacheDir = '/workspace/work/gabc/hfcache';
+const [,, file, model='onnx-community/whisper-base'] = process.argv;
+const buf = fs.readFileSync(file); const audio = new Float32Array(buf.buffer, buf.byteOffset, buf.length/4);
+let t0=Date.now();
+const asr = await pipeline('automatic-speech-recognition', model, { dtype: { encoder_model: process.env.ENC || 'fp32', decoder_model_merged: 'q8' } });
+console.error('load', (Date.now()-t0)/1000); t0=Date.now();
+const out = await asr(audio, { return_timestamps: true, chunk_length_s: 30, stride_length_s: 5, language: 'en', task: 'transcribe' });
+console.error('asr', (Date.now()-t0)/1000, 'audio', audio.length/16000);
+fs.writeFileSync(file+'.json', JSON.stringify(out, null, 1));
+console.log(out.chunks.slice(0,8));

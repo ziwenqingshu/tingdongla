@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TingDongLa 听懂啦 — lecture recording to a review pack you can trust</title>
+<meta name="description" content="Turn a lecture recording and phone photos of the slides into notes, flashcards and a quiz. Every line links back to the second it was said and the slide it was on.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="mark" aria-hidden="true">听</span><div><b>TingDongLa</b> <span class="zh">听懂啦</span><small data-i18n="tagline">Lecture recording + slide photos → a review pack where every line shows its source</small></div></div>
+  <button class="ghost lang" id="langBtn" type="button">中文</button>
+</header>
+
+<main>
+<!-- STEP 1: inputs -->
+<section id="step-input" class="card">
+  <h1 data-i18n="h1">Make a review pack from one lecture</h1>
+  <p class="lead" data-i18n="lead">Add the recording and the photos you took of the slides. Speech and slide text are read on your device; only the text goes to the AI that writes the notes.</p>
+
+  <div class="drops">
+    <label class="drop" id="dropAudio">
+      <input type="file" id="fileAudio" accept="audio/*,video/*,.srt,.vtt,.txt" hidden>
+      <span class="drop-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+      <b data-i18n="audioTitle">Recording</b>
+      <span class="hint" data-i18n="audioHint">Audio or video file — or captions (.srt / .vtt / .txt) if you already have them</span>
+      <span class="picked" id="audioPicked"></span>
+    </label>
+    <label class="drop" id="dropSlides">
+      <input type="file" id="fileSlides" accept="image/*" multiple hidden>
+      <span class="drop-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg></span>
+      <b data-i18n="slidesTitle">Slide photos</b>
+      <span class="hint" data-i18n="slidesHint">Optional. Photos of the slides or board, in any order</span>
+      <span class="picked" id="slidesPicked"></span>
+    </label>
+  </div>
+  <div class="thumbs" id="thumbs"></div>
+
+  <div class="row">
+    <button class="primary" id="goBtn" type="button" disabled data-i18n="go">Make my review pack</button>
+    <button class="link" id="sampleBtn" type="button" data-i18n="sample">Try the sample lecture (Yale ECON 252, 13 min)</button>
+  </div>
+
+  <details class="settings" id="settings">
+    <summary data-i18n="settings">Settings — notes language, AI provider</summary>
+    <div class="grid">
+      <label><span data-i18n="notesLang">Notes language</span>
+        <select id="optLang">
+          <option value="English">English</option>
+          <option value="Simplified Chinese (简体中文)">简体中文</option>
+          <option value="">Same as the lecture</option>
+        </select></label>
+      <label><span data-i18n="speechModel">Speech model (on device)</span>
+        <select id="optAsr">
+          <option value="onnx-community/whisper-base">Whisper base — better (≈80 MB once)</option>
+          <option value="onnx-community/whisper-tiny">Whisper tiny — faster (≈40 MB once)</option>
+        </select></label>
+      <label><span data-i18n="speechLang">Lecture language</span>
+        <select id="optSpeechLang">
+          <option value="">Detect</option><option value="en">English</option><option value="zh">中文</option>
+        </select></label>
+      <label><span data-i18n="provider">AI provider</span>
+        <select id="optProvider"></select></label>
+      <label><span data-i18n="model">Model</span><input id="optModel" list="modelList" autocomplete="off"><datalist id="modelList"></datalist></label>
+      <label class="wide"><span data-i18n="key">API key (stays in this browser)</span>
+        <input id="optKey" type="password" autocomplete="off" placeholder="sk-…">
+        <a id="keyLink" target="_blank" rel="noopener" data-i18n="getKey">Get a free key</a></label>
+    </div>
+    <p class="hint" data-i18n="noKey">No key? You still get the transcript, the slide matching and an outline — just no AI notes, cards or quiz.</p>
+  </details>
+</section>
+
+<!-- STEP 2: progress -->
+<section id="step-progress" class="card" hidden>
+  <h2 data-i18n="working">Working on it</h2>
+  <ol class="stages" id="stages">
+    <li data-stage="asr"><span class="dot"></span><div><b data-i18n="sAsr">Transcribe the recording</b><small class="sub"></small><div class="bar"><i></i></div></div></li>
+    <li data-stage="ocr"><span class="dot"></span><div><b data-i18n="sOcr">Read the slide photos</b><small class="sub"></small><div class="bar"><i></i></div></div></li>
+    <li data-stage="align"><span class="dot"></span><div><b data-i18n="sAlign">Match slides to the recording</b><small class="sub"></small></div></li>
+    <li data-stage="llm"><span class="dot"></span><div><b data-i18n="sLlm">Write notes, cards and quiz (AI)</b><small class="sub"></small><div class="partchips" id="partChips"></div></div></li>
+    <li data-stage="check"><span class="dot"></span><div><b data-i18n="sCheck">Check every item against its source</b><small class="sub"></small></div></li>
+  </ol>
+  <div class="row"><button class="ghost" id="cancelBtn" type="button" data-i18n="cancel">Stop</button></div>
+</section>
+
+<!-- STEP 3: results -->
+<section id="step-result" hidden>
+  <div class="result-head card">
+    <div>
+      <h2 id="packTitle">Review pack</h2>
+      <p class="checkline" id="checkLine"></p>
+    </div>
+    <div class="row">
+      <button class="ghost" id="exportMd" type="button" data-i18n="exportMd">Notes (.md)</button>
+      <button class="ghost" id="exportAnki" type="button" data-i18n="exportAnki">Cards for Anki (.csv)</button>
+      <button class="ghost" id="restartBtn" type="button" data-i18n="restart">New lecture</button>
+    </div>
+  </div>
+  <div class="timeline card" id="timeline" aria-label="Lecture timeline"></div>
+  <div class="layout">
+    <div class="main card">
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="notes" aria-selected="true" data-i18n="tNotes">Notes</button>
+        <button role="tab" data-tab="cards" data-i18n="tCards">Flashcards</button>
+        <button role="tab" data-tab="quiz" data-i18n="tQuiz">Quiz</button>
+        <button role="tab" data-tab="transcript" data-i18n="tTranscript">Transcript</button>
+      </nav>
+      <div id="tab-notes" class="tab"></div>
+      <div id="tab-cards" class="tab" hidden></div>
+      <div id="tab-quiz" class="tab" hidden></div>
+      <div id="tab-transcript" class="tab" hidden></div>
+    </div>
+    <aside class="source card" id="source">
+      <h3 data-i18n="source">Source</h3>
+      <p class="hint" id="sourceHint" data-i18n="sourceHint">Tap a time or slide tag next to any item to see and hear where it came from.</p>
+      <div id="sourceBody" hidden>
+        <div class="src-status" id="srcStatus"></div>
+        <audio id="player" controls preload="metadata"></audio>
+        <blockquote id="srcText"></blockquote>
+        <figure id="srcSlide"><img alt=""><figcaption></figcaption></figure>
+      </div>
+    </aside>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <span data-i18n="foot">Built for the Global AI Builder's Challenge. Speech: Whisper (on device). Slides: Tesseract OCR (on device). Notes: your chosen LLM.</span>
+  <a href="https://github.com/ziwenqingshu/tingdongla" target="_blank" rel="noopener">GitHub</a>
+</footer>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

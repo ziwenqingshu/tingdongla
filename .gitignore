@@ -1,0 +1,8 @@
+node_modules/
+tools/node_modules/
+*.qoder.site
+.qoder*
+*.key
+secrets/
+.env
+__pycache__/

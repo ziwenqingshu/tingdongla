@@ -1,0 +1,11 @@
+import fs from 'fs';
+import { cleanSlides } from '../web/lib/slides.js';
+import { plan } from '../web/lib/pipeline.js';
+import { fmtTime } from '../web/lib/text.js';
+const [asrFile, ocrFile] = process.argv.slice(2);
+const asr = JSON.parse(fs.readFileSync(asrFile));
+const segs = asr.chunks.map(c => ({ start: c.timestamp[0], end: c.timestamp[1] ?? c.timestamp[0] + 5, text: c.text }));
+const slides = cleanSlides(JSON.parse(fs.readFileSync(ocrFile)).map(x => ({ text: x.text, conf: x.conf })));
+const p = plan(segs, slides);
+p.ranges.forEach((r, i) => console.log('slide', i + 1, (slides[i].title||'').slice(0,40).padEnd(40), r.map(x => `${fmtTime(x.start)}-${fmtTime(x.end)} (${x.score.toFixed(2)})`).join(', ') || '— not matched'));
+console.log('parts:', p.parts.map(x => `${fmtTime(x.start)}-${fmtTime(x.end)} [${x.slides}]`).join(' | '));
