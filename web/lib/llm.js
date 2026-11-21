@@ -98,7 +98,7 @@ export class LlmError extends Error {
   constructor(code, detail = '') { super(code); this.code = code; this.detail = detail; }
 }
 
-async function chat(cfg, prompt, { signal, timeoutMs = 90000 } = {}) {
+async function chat(cfg, prompt, { signal, timeoutMs = 180000 } = {}) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(new Error('timeout')), timeoutMs);
   const onAbort = () => ctl.abort(signal.reason);
@@ -161,7 +161,8 @@ const wait = (ms, signal) => new Promise((res, rej) => {
 // opt.onAttempt({model, code}) reports each failed attempt to the UI.
 export async function generate(cfg, prompt, validate, opt = {}) {
   const t0 = Date.now();
-  const models = [cfg.model, ...(cfg.fallbacks || []).filter(m => m && m !== cfg.model)];
+  // After the fallbacks, the first model gets one more try: free-tier 429s usually clear in seconds.
+  const models = [cfg.model, ...(cfg.fallbacks || []).filter(m => m && m !== cfg.model), cfg.model];
   let last;
   for (let i = 0; i < models.length; i++) {
     try {
@@ -171,7 +172,7 @@ export async function generate(cfg, prompt, validate, opt = {}) {
       last = e;
       opt.onAttempt?.({ model: models[i], code: e.code });
       if (!TRANSIENT.has(e.code) || e.code === 'cancelled') throw e;
-      if (i + 1 < models.length) await wait(e.code === 'rate_limited' ? 4000 : 1000, opt.signal);
+      if (i + 1 < models.length) await wait(i + 2 === models.length ? 15000 : e.code === 'rate_limited' ? 4000 : 1000, opt.signal);
     }
   }
   throw last;

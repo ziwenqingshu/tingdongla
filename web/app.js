@@ -1,5 +1,5 @@
 // TingDongLa UI: inputs → on-device speech + slide reading → slide matching → AI notes → source check.
-import { parseTranscript, fmtTime, escapeHtml } from './lib/text.js';
+import { parseTranscript, fmtTime, escapeHtml, parseTime } from './lib/text.js';
 import { cleanSlides } from './lib/slides.js';
 import { plan, runPart, runQuiz, stats, outlinePart } from './lib/pipeline.js';
 import { PROVIDERS } from './lib/llm.js';
@@ -109,7 +109,9 @@ $('#sampleBtn').onclick = async () => {
 };
 
 // ---------- progress UI ----------
+let curStage = 'asr';
 function stage(name, state, sub, frac) {
+  if (state === 'run') curStage = name;
   const li = $(`[data-stage="${name}"]`);
   if (state) li.dataset.state = state;
   if (sub != null) li.querySelector('.sub').textContent = sub;
@@ -152,7 +154,7 @@ function transcribe(audio, model, language, onProgress) {
 let tesseract = null;
 async function ocrSlides(list, onProgress) {
   if (!list.length) return [];
-  if (!tesseract) tesseract = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js');
+  if (!tesseract) { const m = await import('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js'); tesseract = m.createWorker ? m : m.default; }
   const langs = $('#optSpeechLang').value === 'en' ? 'eng' : 'eng+chi_sim';
   const worker = await tesseract.createWorker(langs, 1);
   const out = [];
@@ -268,7 +270,7 @@ async function start() {
     run.done = true;
     renderResult(); show('result');
   } catch (e) {
-    const where = e.stage || 'asr';
+    const where = e.stage || curStage;
     stage(where, 'fail', e.code === 'cancelled' ? t('cancelled') : e.message);
     toast(e.code === 'cancelled' ? t('cancelled') : e.message, 8000);
     $('#cancelBtn').textContent = t('back'); $('#cancelBtn').onclick = () => { $('#cancelBtn').textContent = t('cancel'); $('#cancelBtn').onclick = () => abort?.abort(); show('input'); };
@@ -278,7 +280,7 @@ async function start() {
 // ---------- results ----------
 function cite(it) {
   const c = it.check || {};
-  const tm = c.t != null ? c.t : null;
+  const tm = c.t != null ? c.t : (!it.check && Number.isFinite(parseTime(it.t)) ? parseTime(it.t) : null);
   const slide = c.slide ?? (it.check ? null : it.slide);
   const cls = c.status || 'none';
   const label = { verified: t('bVerified'), moved: t('bMoved'), unsupported: t('bUnsupported') }[cls] || '';
